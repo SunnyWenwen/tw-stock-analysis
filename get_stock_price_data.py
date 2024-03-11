@@ -2,16 +2,34 @@ from datetime import datetime, timedelta
 from typing import List, Union
 
 import numpy as np
+import pandas as pd
 from twstock import Stock
 
 
 class MyStock(Stock):
+    """
+    MyStock繼承twstock.Stock，並加入一些自己的方法。
+
+    任何塞選資料，建議都把資料塞到self.data 然後return self.data
+
+    資料說明
+    date: datetime.datetime格式之時間，例如datetime.datetime(2017, 6, 12, 0, 0)。
+    capacity: 總成交股數(單位: 股)。
+    turnover: 總成交金額(單位: 新台幣 / 元)。
+    open: 開盤價。
+    high: 盤中最高價
+    low:盤中最低價。
+    close: 收盤價。
+    change: 漲跌價差。
+    transaction: 成交筆數。
+    """
+
     def __int__(self, sid: str, initial_fetch: bool = True):
         super().__init__(sid, initial_fetch)
 
     def fetch_from_to(self, from_year: int, from_month: int, to_year: int, to_month: int):
         """
-        抓取指定時間區間的股價資料
+        抓取指定月份區間的股價資料
         """
         self.raw_data = []
         self.data = []
@@ -86,7 +104,7 @@ class MyStock(Stock):
 
     def to_df(self):
         # 轉成dataframe
-        pass
+        return pd.DataFrame(self.data)
 
 
 if __name__ == '__main__':
