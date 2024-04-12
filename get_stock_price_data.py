@@ -138,12 +138,13 @@ class MyStock(Stock):
             start_backtest_date,
             n_daily_average)
         print(f'起始日期: {real_start_backtest_date}, 起始股價: {start_stock_price}, N日均價: {n_daily_average}日')
-        result = []
+        result_dict = {}
         for i in test_day_list:
             test_date = start_backtest_date + timedelta(days=i)
             if test_date > datetime.today():
                 if not silent:
                     print(f'測試日期: {test_date}超過今天，無法進行測試')
+                result_dict[i] = None
                 continue
             test_stock_price, real_test_start_backtest_date = self.get_target_date_n_daily_average_price(test_date,
                                                                                                          n_daily_average)
@@ -151,7 +152,7 @@ class MyStock(Stock):
             day_range = (real_test_start_backtest_date - real_start_backtest_date).days
             IRR = ((test_stock_price / start_stock_price) ** (365 / day_range) - 1) * 100
             IRR = round(IRR, 2)
-            result.append(IRR)
+            result_dict[i] = IRR
             if not silent:
                 print(
                     f"測試日期: {real_test_start_backtest_date}(經過{day_range}天), "
@@ -159,7 +160,8 @@ class MyStock(Stock):
                     f"起始股價: {start_stock_price}, "
                     f"漲跌幅: {(test_stock_price / start_stock_price - 1) * 100:.2f}%,"
                     f"年均報酬率: {IRR:.2f}%")
-        return result if result else [None]
+
+        return result_dict
 
     def to_df(self):
         # 轉成dataframe
@@ -173,7 +175,7 @@ class MyStock(Stock):
 
 if __name__ == '__main__':
     stock = MyStock('2330')
-    stock.back_test(datetime(year=2023, month=3, day=5), 5)
+    print(stock.back_test(datetime(year=2023, month=3, day=5)))
 
 # stock.a = fetch_from1
 #
