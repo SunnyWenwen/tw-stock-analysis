@@ -37,8 +37,11 @@ class MyStock(Stock):
     transaction: 成交筆數。
     """
 
-    def __int__(self, sid: str, initial_fetch: bool = True):
-        super().__init__(sid, initial_fetch)
+    def __init__(self, sid: str, initial_fetch: bool = True):
+        try:
+            super().__init__(sid, initial_fetch)
+        except Exception as e:
+            raise Exception(f'股票代碼{sid}初始化失敗')
 
     def fetch_from_to(self, from_year: int, from_month: int, to_year: int, to_month: int):
         """
@@ -116,12 +119,18 @@ class MyStock(Stock):
         return self.moving_average(self.price, n_daily_average)[-1], self.data[-1].date
 
     def back_test(self, start_backtest_date: datetime, n_daily_average=5,
-                  test_day_list: List = [30, 60, 120, 180, 360], silent=False) -> List[Union[float, None]]:
+                  test_day_list: List = [30, 60, 120, 180, 360], evaluation_metric='ROI', silent=False) -> List[
+        Union[float, None]]:
         """
         回測股價
+
         :param start_backtest_date: 開始回測日期
         :param n_daily_average: 使用幾日均價當作當天價格(預設5日均價)
         :param test_day_list: 回測測試天數列表
+        :param evaluation_metric:
+            評估指標。
+            ROI: 投報率
+            IRR: 年度報酬率
         :param silent: 是否print回測結果
         :return:
         """
@@ -150,16 +159,20 @@ class MyStock(Stock):
                                                                                                          n_daily_average)
 
             day_range = (real_test_start_backtest_date - real_start_backtest_date).days
-            IRR = ((test_stock_price / start_stock_price) ** (365 / day_range) - 1) * 100
-            IRR = round(IRR, 2)
-            result_dict[i] = IRR
+            if evaluation_metric == 'IRR':
+                metric = ((test_stock_price / start_stock_price) ** (365 / day_range) - 1) * 100
+                metric = round(metric, 2)
+            else:
+                metric = ((test_stock_price / start_stock_price) - 1) * 100
+                metric = round(metric, 2)
+            result_dict[i] = metric
             if not silent:
                 print(
                     f"測試日期: {real_test_start_backtest_date}(經過{day_range}天), "
                     f"測試股價: {test_stock_price}, "
                     f"起始股價: {start_stock_price}, "
                     f"漲跌幅: {(test_stock_price / start_stock_price - 1) * 100:.2f}%,"
-                    f"年均報酬率: {IRR:.2f}%")
+                    f"年均報酬率: {metric:.2f}%")
 
         return result_dict
 

@@ -10,12 +10,11 @@ etf00939_constituent_stocks = {'2454': (6.21, '聯發科'), '3231': (5.85, '緯�
                                '3711': (5.07, '日月光投控'), '2385': (5.06, '群光'), '6669': (4.84, '緯穎'),
                                '3037': (3.93, '欣興'),
                                '2379': (3.75, '瑞昱'), '2603': (3.66, '長榮')}
-# 五百億
-cost = 50000000000
+
 n_day = 5
 
 
-def get_etf_constituent_stocks_percentage(constituent_stocks):
+def get_etf_constituent_stocks_percentage(constituent_stocks, cost):
     print('ETF成分股購入金額，成交金額占比')
     for stock_code, (weight, stock_name) in constituent_stocks.items():
         print(stock_code, weight)
@@ -27,5 +26,5 @@ def get_etf_constituent_stocks_percentage(constituent_stocks):
             f"{stock_code}/{stock_name} 近{n_day}天平均成交金額: {n_day_average_turnover}, ETF購買金額於成交金額占比: {turnover_percentage:.2f}%")
 
 
-get_etf_constituent_stocks_percentage(etf00939_constituent_stocks)
-get_etf_constituent_stocks_percentage(etf00940_constituent_stocks)
+get_etf_constituent_stocks_percentage(etf00939_constituent_stocks, 5 * 10 ** 10)
+get_etf_constituent_stocks_percentage(etf00940_constituent_stocks, 1.7 * 10 ** 11)
