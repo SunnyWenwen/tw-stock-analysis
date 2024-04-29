@@ -38,10 +38,18 @@ class MyStock(Stock):
     """
 
     def __init__(self, sid: str, initial_fetch: bool = True):
+        start_time = datetime.now()
         try:
             super().__init__(sid, initial_fetch)
         except Exception as e:
             raise Exception(f'股票代碼{sid}初始化失敗')
+        print(f'股票代碼{sid}初始化成功，耗時{round((datetime.now() - start_time).total_seconds(), 3)}秒')
+
+    def fetch_31(self):
+        """Fetch 31 days data"""
+        today = datetime.today()
+        before = today - timedelta(days=60)
+        self.fetch_from_to(before.year, before.month, today.year, today.month)
 
     def fetch_from_to(self, from_year: int, from_month: int, to_year: int, to_month: int):
         """
@@ -139,20 +147,21 @@ class MyStock(Stock):
         # test_day_list: List = [30, 60, 120, 180, 360]
         # n_daily_average = 5
         # 不可早於今天
-        assert start_backtest_date <= datetime.today(), f'start_backtest_date不可早於今天'
+        assert start_backtest_date <= datetime.today(), f'start_backtest_date不可晚於今天'
         # 確認時間格式
         assert isinstance(start_backtest_date, datetime)
 
         start_stock_price, real_start_backtest_date = self.get_target_date_n_daily_average_price(
             start_backtest_date,
             n_daily_average)
-        print(f'起始日期: {real_start_backtest_date}, 起始股價: {start_stock_price}, N日均價: {n_daily_average}日')
+        print(f'開始回測股票SID : {self.sid}')
+        print(f'    起始日期: {real_start_backtest_date}, 起始股價: {start_stock_price}, N日均價: {n_daily_average}日')
         result_dict = {}
         for i in test_day_list:
             test_date = start_backtest_date + timedelta(days=i)
             if test_date > datetime.today():
                 if not silent:
-                    print(f'測試日期: {test_date}超過今天，無法進行測試')
+                    print(f'    測試日期: {test_date}超過今天，無法進行測試')
                 result_dict[i] = None
                 continue
             test_stock_price, real_test_start_backtest_date = self.get_target_date_n_daily_average_price(test_date,
@@ -168,7 +177,7 @@ class MyStock(Stock):
             result_dict[i] = metric
             if not silent:
                 print(
-                    f"測試日期: {real_test_start_backtest_date}(經過{day_range}天), "
+                    f"    測試日期: {real_test_start_backtest_date}(經過{day_range}天), "
                     f"測試股價: {test_stock_price}, "
                     f"起始股價: {start_stock_price}, "
                     f"漲跌幅: {(test_stock_price / start_stock_price - 1) * 100:.2f}%,"

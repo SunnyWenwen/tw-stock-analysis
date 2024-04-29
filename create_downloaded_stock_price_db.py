@@ -1,6 +1,6 @@
 import sqlite3
 
-db_file_name = "stock_data.db"
+db_file_name = "D:\data\stock_data\stock_data.db"
 conn = sqlite3.connect(db_file_name)
 
 
