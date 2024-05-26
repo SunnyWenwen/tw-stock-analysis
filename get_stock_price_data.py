@@ -41,13 +41,14 @@ class MyStock(Stock):
     transaction: 成交筆數。
     """
 
-    def __init__(self, sid: str, initial_fetch: bool = True):
+    def __init__(self, sid: str, initial_fetch: bool = True, silent=False):
         start_time = datetime.now()
         try:
             super().__init__(sid, initial_fetch)
         except Exception as e:
             raise Exception(f'股票代碼{sid}初始化失敗')
-        print(f'股票代碼{sid}初始化成功，耗時{round((datetime.now() - start_time).total_seconds(), 3)}秒')
+        if not silent:
+            print(f'股票代碼{sid}初始化成功，耗時{round((datetime.now() - start_time).total_seconds(), 3)}秒')
 
     def fetch_31(self):
         """Fetch 31 days data"""
@@ -166,9 +167,10 @@ class MyStock(Stock):
         start_stock_price, real_start_cal_return_date = self.get_target_date_n_daily_average_price(
             start_cal_return_date,
             n_daily_average)
-        print(f'開始回測股票SID : {self.sid}')
-        print(
-            f'    起始日期: {real_start_cal_return_date}, 起始股價: {start_stock_price}, N日均價: {n_daily_average}日')
+        if not silent:
+            print(f'開始回測股票SID : {self.sid}')
+            print(
+                f'    起始日期: {real_start_cal_return_date}, 起始股價: {start_stock_price}, N日均價: {n_daily_average}日')
         result_dict = {}
         for i in test_day_list:
             test_date = start_cal_return_date + timedelta(days=i)
