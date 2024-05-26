@@ -1,3 +1,4 @@
+import time
 from collections import namedtuple
 from datetime import datetime, timedelta
 from typing import List, Union
@@ -5,6 +6,7 @@ from typing import List, Union
 import numpy as np
 import pandas as pd
 from twstock import Stock
+from twstock.codes import codes
 
 from create_downloaded_stock_price_db import conn
 
@@ -16,6 +18,8 @@ def year_month(year, month):
 DATATUPLE2 = namedtuple('Data',
                         ['sid', 'month', 'date', 'capacity', 'turnover', 'last_close', 'open', 'high', 'low', 'close',
                          'change', 'transaction'])
+cur_month = datetime.today().month
+cur_year = datetime.today().year
 
 
 class MyStock(Stock):
@@ -58,10 +62,13 @@ class MyStock(Stock):
         self.raw_data = []
         self.data = []
         for year, month in self._month_year_iter(from_month, from_year, to_month, to_year):
-            is_this_month = year == to_year and month == to_month
+
+            # 是否為當前月份
+            is_this_month = year == cur_year and month == cur_month
             year_month_str = year_month(year, month)
+            # 是否沒抓過該月資料
             not_in_db = not self.check_stock_data_in_db(year_month_str)
-            # 先從DB確認有沒有抓過該股票該月的資料，若沒有抓過或是當前月份，則抓取資料塞入DB
+            # 沒抓過該閱資料，或是當前月份就要去線上抓取，否則從DB取出資料
             if is_this_month or not_in_db:
                 new_fetch_data = self.fetcher.fetch(year, month, self.sid)
                 new_fetch_data = new_fetch_data['data']
@@ -114,8 +121,9 @@ class MyStock(Stock):
         stock.get_target_date_n_daily_average_price(datetime(year=2024, month=2, day=25), 60)
         """
 
-        # 確保可以抓到N日均價
+        # 往前抓3倍N天前的日期的月份，確保可以抓到N日均價
         pre_month = target_date - timedelta(days=n_daily_average * 3)
+        # 抓取 3倍N天前的日期的月份 到 當月
         self.fetch_from_to(pre_month.year, pre_month.month, target_date.year, target_date.month)
         # 去掉晚於target_date的資料
         self.data = [tmp_data for tmp_data in self.data if tmp_data.date <= target_date]
@@ -126,15 +134,19 @@ class MyStock(Stock):
 
         return self.moving_average(self.price, n_daily_average)[-1], self.data[-1].date
 
-    def back_test(self, start_backtest_date: datetime, n_daily_average=5,
-                  test_day_list: List = [30, 60, 120, 180, 360], evaluation_metric='ROI', silent=False) -> List[
+    def get_taiex_performance(self, target_date: datetime, n_daily_average: int, soft=True):
+        pass
+
+    def cal_return(self, start_cal_return_date: datetime, n_daily_average=5,
+                   test_day_list: List = [10, 30, 60, 120, 180, 360], evaluation_metric='ROI', silent=False,
+                   adjust_by_taiex=False) -> List[
         Union[float, None]]:
         """
         回測股價
-
-        :param start_backtest_date: 開始回測日期
+        :param adjust_by_taiex: 計算報酬是否要用大盤進行校正
+        :param start_cal_return_date: 開始計算報酬的日期
         :param n_daily_average: 使用幾日均價當作當天價格(預設5日均價)
-        :param test_day_list: 回測測試天數列表
+        :param test_day_list: 績效測試天數列表
         :param evaluation_metric:
             評估指標。
             ROI: 投報率
@@ -143,41 +155,45 @@ class MyStock(Stock):
         :return:
         """
         # sid = '2330'
-        # start_backtest_date = datetime(year=2023, month=9, day=18)
+        # start_cal_return_date = datetime(year=2023, month=9, day=18)
         # test_day_list: List = [30, 60, 120, 180, 360]
         # n_daily_average = 5
         # 不可早於今天
-        assert start_backtest_date <= datetime.today(), f'start_backtest_date不可晚於今天'
+        assert start_cal_return_date <= datetime.today(), f'start_cal_return_date不可晚於今天'
         # 確認時間格式
-        assert isinstance(start_backtest_date, datetime)
+        assert isinstance(start_cal_return_date, datetime)
 
-        start_stock_price, real_start_backtest_date = self.get_target_date_n_daily_average_price(
-            start_backtest_date,
+        start_stock_price, real_start_cal_return_date = self.get_target_date_n_daily_average_price(
+            start_cal_return_date,
             n_daily_average)
         print(f'開始回測股票SID : {self.sid}')
-        print(f'    起始日期: {real_start_backtest_date}, 起始股價: {start_stock_price}, N日均價: {n_daily_average}日')
+        print(
+            f'    起始日期: {real_start_cal_return_date}, 起始股價: {start_stock_price}, N日均價: {n_daily_average}日')
         result_dict = {}
         for i in test_day_list:
-            test_date = start_backtest_date + timedelta(days=i)
+            test_date = start_cal_return_date + timedelta(days=i)
             if test_date > datetime.today():
                 if not silent:
                     print(f'    測試日期: {test_date}超過今天，無法進行測試')
                 result_dict[i] = None
                 continue
-            test_stock_price, real_test_start_backtest_date = self.get_target_date_n_daily_average_price(test_date,
-                                                                                                         n_daily_average)
+            test_stock_price, real_end_cal_return_date = self.get_target_date_n_daily_average_price(test_date,
+                                                                                                    n_daily_average)
 
-            day_range = (real_test_start_backtest_date - real_start_backtest_date).days
+            day_range = (real_end_cal_return_date - real_start_cal_return_date).days
             if evaluation_metric == 'IRR':
                 metric = ((test_stock_price / start_stock_price) ** (365 / day_range) - 1) * 100
                 metric = round(metric, 2)
-            else:
+            elif evaluation_metric == 'ROI':
                 metric = ((test_stock_price / start_stock_price) - 1) * 100
                 metric = round(metric, 2)
+            else:
+                raise ValueError('evaluation_metric只能為"ROI"或"IRR"')
+
             result_dict[i] = metric
             if not silent:
                 print(
-                    f"    測試日期: {real_test_start_backtest_date}(經過{day_range}天), "
+                    f"    測試日期: {real_end_cal_return_date}(經過{day_range}天), "
                     f"測試股價: {test_stock_price}, "
                     f"起始股價: {start_stock_price}, "
                     f"漲跌幅: {(test_stock_price / start_stock_price - 1) * 100:.2f}%,"
@@ -194,24 +210,28 @@ class MyStock(Stock):
         res = conn.execute(f"SELECT * FROM stock_header WHERE sid = '{self.sid}' AND month = '{year_month_str}'")
         return res.fetchone() is not None
 
+    def recent_fluctuation(self, n=5):
+        """
+        往回看，最近n日的漲跌幅
+        """
+        pass
+
 
 if __name__ == '__main__':
-    stock = MyStock('2330')
-    print(stock.back_test(datetime(year=2023, month=3, day=5)))
+    start = time.time()
+    stock = MyStock('00631L', initial_fetch=False)
+    print(f'Init {time.time() - start} seconds')
 
-# stock.a = fetch_from1
-#
-# stock = Stock('2330')
-# len(stock.price)
-# ma_p = stock.moving_average(stock.price, 1)
-# stock.__class__.
-# stock.fetch_from(2020, 1)
-# stock.fetcher.fetch(2020, 1, stock.sid)
+    start = time.time()
+    stock = MyStock('00631L', initial_fetch=True)
+    print(f'Init {time.time() - start} seconds')
 
+    # 跑第一次
+    start = time.time()
+    print(stock.cal_return(datetime(year=2020, month=3, day=5)))
+    print(f'All took {time.time() - start} seconds')
 
-# # 處理該月份資料
-# def to_dict(date_data):
-#     return {key: val for key, val in zip(date_data._fields, date_data)}
-#
-# start_backtest_month_data_dict = {tmp_date_data.date: to_dict(tmp_date_data) for tmp_date_data in
-#                                   start_backtest_month_data}
+    # 跑第二次會比較快
+    start = time.time()
+    print(stock.cal_return(datetime(year=2020, month=3, day=5)))
+    print(f'All took {time.time() - start} seconds')
