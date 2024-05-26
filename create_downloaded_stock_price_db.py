@@ -43,6 +43,25 @@ def create_stock_header_table():
     conn.commit()
 
 
+def create_TWII_table():
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS TWII_daily_price (
+        date DATE,
+        open REAL,
+        high REAL,
+        low REAL,
+        close REAL,
+        volume INTEGER,
+        dividends REAL,
+        stock_splits REAL,
+        updated_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (date)
+    )
+    """)
+    conn.commit()
+
+
 if __name__ == '__main__':
     create_stock_price_table()
     create_stock_header_table()
+    create_TWII_table()
