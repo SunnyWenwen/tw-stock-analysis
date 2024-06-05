@@ -16,7 +16,7 @@ def year_month(year, month):
 
 
 DATATUPLE2 = namedtuple('Data',
-                        ['sid', 'month', 'date', 'capacity', 'turnover', 'last_close', 'open', 'high', 'low', 'close',
+                        ['sid', 'month', 'date', 'capacity', 'turnover', 'previous_close', 'open', 'high', 'low', 'close',
                          'change', 'transaction'])
 cur_month = datetime.today().month
 cur_year = datetime.today().year
@@ -32,7 +32,7 @@ class MyStock(Stock):
     date: datetime.datetime格式之時間，例如datetime.datetime(2017, 6, 12, 0, 0)。
     capacity: 總成交股數(單位: 股)。
     turnover: 總成交金額(單位: 新台幣 / 元)。
-    last_close: 昨日收盤價。
+    previous_close: 昨日收盤價。
     open: 開盤價。
     high: 盤中最高價
     low:盤中最低價。
@@ -102,7 +102,7 @@ class MyStock(Stock):
             'date': datetime.strptime(sub_db_data[2], '%Y-%m-%d %H:%M:%S'),
             'capacity': sub_db_data[3],
             'turnover': sub_db_data[4],
-            'last_close': sub_db_data[5],
+            'previous_close': sub_db_data[5],
             'open': sub_db_data[6],
             'high': sub_db_data[7],
             'low': sub_db_data[8],

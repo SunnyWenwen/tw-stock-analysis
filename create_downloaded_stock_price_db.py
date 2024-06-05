@@ -15,7 +15,7 @@ def create_stock_price_table():
         date TIMESTAMP,
         capacity INTEGER,
         turnover INTEGER,
-        last_close REAL,
+        previous_close REAL,
         open REAL,
         high REAL,
         low REAL,
@@ -54,6 +54,8 @@ def create_TWII_table():
         volume INTEGER,
         dividends REAL,
         stock_splits REAL,
+        previous_close REAL,
+        change REAL,
         updated_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (date)
     )
