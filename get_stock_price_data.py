@@ -1,7 +1,7 @@
 import time
 from collections import namedtuple
 from datetime import datetime, timedelta
-from typing import List, Union
+from typing import List, Union, Dict
 
 import numpy as np
 import pandas as pd
@@ -9,6 +9,7 @@ from twstock import Stock
 from twstock.codes import codes
 
 from create_downloaded_stock_price_db import conn
+from get_TWII_price import get_TWII_data
 
 
 def year_month(year, month):
@@ -16,8 +17,8 @@ def year_month(year, month):
 
 
 DATATUPLE2 = namedtuple('Data',
-                        ['sid', 'month', 'date', 'capacity', 'turnover', 'previous_close', 'open', 'high', 'low', 'close',
-                         'change', 'transaction'])
+                        ['sid', 'month', 'date', 'capacity', 'turnover', 'previous_close', 'open', 'high', 'low',
+                         'close', 'change', 'transaction'])
 cur_month = datetime.today().month
 cur_year = datetime.today().year
 
@@ -139,9 +140,8 @@ class MyStock(Stock):
         pass
 
     def cal_return(self, start_cal_return_date: datetime, n_daily_average=5,
-                   test_day_list: List = [10, 30, 60, 120, 180, 360], evaluation_metric='ROI', silent=False,
-                   adjust_by_taiex=False) -> List[
-        Union[float, None]]:
+                   test_day_list: List[int] = [10, 30, 60, 120, 180, 360], evaluation_metric='ROI', silent=False,
+                   adjust_by_taiex=False) -> Dict[str, Union[float, None]]:
         """
         回測股價
         :param adjust_by_taiex: 計算報酬是否要用大盤進行校正
@@ -177,7 +177,7 @@ class MyStock(Stock):
             if test_date > datetime.today():
                 if not silent:
                     print(f'    測試日期: {test_date}超過今天，無法進行測試')
-                result_dict[i] = None
+                result_dict[str(i)] = None
                 continue
             test_stock_price, real_end_cal_return_date = self.get_target_date_n_daily_average_price(test_date,
                                                                                                     n_daily_average)
@@ -192,7 +192,24 @@ class MyStock(Stock):
             else:
                 raise ValueError('evaluation_metric只能為"ROI"或"IRR"')
 
-            result_dict[i] = metric
+            result_dict[str(i)] = metric
+            # 是否用大盤進行校正
+            if adjust_by_taiex:
+                # 計算大盤報酬率
+                # 開始日期的大盤價格，這個日期是股票有資料的日期，理論上大盤也會有。4是收盤價
+                taiex_start_price = get_TWII_data(real_start_cal_return_date.strftime('%Y-%m-%d'))[4]
+                taiex_end_price = get_TWII_data(real_end_cal_return_date.strftime('%Y-%m-%d'))[4]
+                # 計算大盤報酬率
+                if evaluation_metric == 'IRR':
+                    taiex_metric = ((taiex_end_price / taiex_start_price) ** (365 / day_range) - 1) * 100
+                    taiex_metric = round(taiex_metric, 2)
+                elif evaluation_metric == 'ROI':
+                    taiex_metric = ((taiex_end_price / taiex_start_price) - 1) * 100
+                    taiex_metric = round(taiex_metric, 2)
+                # 扣去大盤報酬率
+                adjust_metric = metric - taiex_metric
+                result_dict[str(i) + '_adj'] = round(adjust_metric, 2)
+
             if not silent:
                 print(
                     f"    測試日期: {real_end_cal_return_date}(經過{day_range}天), "
@@ -237,3 +254,6 @@ if __name__ == '__main__':
     start = time.time()
     print(stock.cal_return(datetime(year=2020, month=3, day=5)))
     print(f'All took {time.time() - start} seconds')
+
+    # 校正by大盤
+    print(stock.cal_return(datetime(year=2024, month=3, day=5), adjust_by_taiex=True))

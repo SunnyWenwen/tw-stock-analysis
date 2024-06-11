@@ -57,9 +57,11 @@ def get_TWII_data(date):  # date = '2024-05-26'
     8 previous_close: 前一天的收盤價
     9 change: 收盤價變動
 
+    datetime.strftime('%Y-%m-%d')
     :param date:
     :return:
     """
+
     # 檢查date是否為str and yyyy-mm-dd格式
     if not isinstance(date, str):
         raise ValueError('date必須為str的yyyy-mm-dd格式, 例如: "2021-01-01"')
