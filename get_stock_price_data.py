@@ -229,11 +229,20 @@ class MyStock(Stock):
         res = conn.execute(f"SELECT * FROM stock_header WHERE sid = '{self.sid}' AND month = '{year_month_str}'")
         return res.fetchone() is not None
 
-    def recent_fluctuation(self, n=5):
+    def recent_fluctuation(self, days_list: List[int] = [5, 10, 30, 60, 120]):
         """
         往回看，最近n日的漲跌幅
         """
-        pass
+        res_dict = {}
+        # 抓取當日股價
+        today_price = self.get_target_date_n_daily_average_price(datetime.today(), 1)[0]
+        for tmp_day in days_list:
+            tmp_day_ago_price = \
+                self.get_target_date_n_daily_average_price(datetime.today() - timedelta(days=tmp_day), 1)[0]
+            # 計算漲跌幅並加入dict
+            res_dict[str(tmp_day)] = round((today_price / tmp_day_ago_price - 1) * 100, 2)
+
+        return res_dict
 
 
 if __name__ == '__main__':
@@ -257,3 +266,6 @@ if __name__ == '__main__':
 
     # 校正by大盤
     print(stock.cal_return(datetime(year=2024, month=3, day=5), adjust_by_taiex=True))
+
+    # 計算近期漲跌幅
+    print(stock.recent_fluctuation([5, 10, 20, 30]))
