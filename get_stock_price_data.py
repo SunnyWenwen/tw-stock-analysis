@@ -178,6 +178,8 @@ class MyStock(Stock):
                 if not silent:
                     print(f'    測試日期: {test_date}超過今天，無法進行測試')
                 result_dict[str(i)] = None
+                if adjust_by_taiex:
+                    result_dict[str(i) + '_adj'] = None
                 continue
             test_stock_price, real_end_cal_return_date = self.get_target_date_n_daily_average_price(test_date,
                                                                                                     n_daily_average)
