@@ -115,7 +115,7 @@ class MyStock(Stock):
 
     def get_target_date_n_daily_average_price(self, target_date: datetime, n_daily_average: int, soft=True):
         """
-        取得指定日期的N日均價。若當日無資料，則往前找到有資料的日期。
+        取得指定日期的N日收盤價的均價。若當日無資料，則往前找到有資料的日期。
         :param target_date: 指定日期
         :param n_daily_average: N日均價
         :param soft: 是否使用軟性搜尋，若為True，則會往前找到有資料的日期，若為False，則會直接回傳None
