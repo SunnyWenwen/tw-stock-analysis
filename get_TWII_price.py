@@ -5,7 +5,6 @@ from create_downloaded_stock_price_db import conn, create_TWII_table
 
 
 # 確認是否有TWII的table，若沒有則建立一個
-
 def update_TWII_data(start_date, all_data=False):
     # start_date = '2024-05-22'
     # 確認start_date是否為str and yyyy-mm-dd格式
@@ -33,10 +32,15 @@ def update_TWII_data(start_date, all_data=False):
     df['previous_close'] = df['Close'].shift(1)
     df['change'] = df['Close'] - df['previous_close']
 
+    # 沒有change的資料踢掉，因為沒抓前一天的資料
+    df = df.dropna(subset=['change'])
+
     # 比db內最晚的時間還要早的替除掉，避免重複
     if not all_data:
-        latest_date = conn.execute("SELECT MAX(date) FROM TWII_daily_price").fetchone()[0]
-        df = df[df['Date'] > latest_date]
+        # 剔除DB內這次更新的資料
+        min_df_date = min(df['Date'])
+        conn.execute(f"DELETE FROM TWII_daily_price WHERE date >= '{min_df_date}'")
+
     df.columns = ['date', 'open', 'high', 'low', 'close', 'volume', 'dividends', 'stock_splits', 'previous_close',
                   'change']
     df.to_sql('TWII_daily_price', conn, if_exists='append', index=False)
@@ -61,6 +65,13 @@ def get_TWII_data(date):  # date = '2024-05-26'
     :param date:
     :return:
     """
+    # 先確認資料是不是最新的，若不是則更新
+    latest_updated_date = conn.execute("SELECT MAX(updated_date) FROM TWII_daily_price").fetchone()[0]
+    # 轉為時間格式
+    latest_updated_date = pd.to_datetime(latest_updated_date)
+    # 用年月日比較，若更新日期是今天以前，則更新
+    if latest_updated_date.strftime('%Y-%m-%d') < pd.Timestamp.now().strftime('%Y-%m-%d'):
+        update_TWII_data(latest_updated_date.strftime('%Y-%m-%d'))
 
     # 檢查date是否為str and yyyy-mm-dd格式
     if not isinstance(date, str):
