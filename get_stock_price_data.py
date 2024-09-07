@@ -19,8 +19,9 @@ def year_month(year, month):
 DATATUPLE2 = namedtuple('Data',
                         ['sid', 'month', 'date', 'capacity', 'turnover', 'previous_close', 'open', 'high', 'low',
                          'close', 'change', 'transaction'])
-cur_month = datetime.today().month
-cur_year = datetime.today().year
+today = datetime.today()
+cur_month = today.month
+cur_year = today.year
 
 
 class MyStock(Stock):
@@ -47,7 +48,8 @@ class MyStock(Stock):
         try:
             super().__init__(sid, initial_fetch)
         except Exception as e:
-            raise Exception(f'股票代碼{sid}初始化失敗')
+
+            raise Exception(f'股票代碼{sid}初始化失敗，錯誤訊息: {e}')
         if not silent:
             print(f'股票代碼{sid}初始化成功，耗時{round((datetime.now() - start_time).total_seconds(), 3)}秒')
 
@@ -68,15 +70,16 @@ class MyStock(Stock):
             # 是否為當前月份
             is_this_month = year == cur_year and month == cur_month
             year_month_str = year_month(year, month)
-            # 是否沒抓過該月資料
-            not_in_db = not self.check_stock_data_in_db(year_month_str)
-            # 沒抓過該閱資料，或是當前月份就要去線上抓取，否則從DB取出資料
-            if is_this_month or not_in_db:
+            # 是否抓過該月完整資料，或是今天已經抓過
+            update_price_date = not self.check_stock_data_in_db(year_month_str)
+            # (沒抓過該月資料或是該月資料抓不全)且當天還沒抓過，就要去線上抓取，否則從DB取出資料。
+            if update_price_date:
                 new_fetch_data = self.fetcher.fetch(year, month, self.sid)
                 new_fetch_data = new_fetch_data['data']
                 # 存入DB header，若key存在要更新日期
+                # 當月抓取當月資料可能會抓不完整，故要記錄起來，下次抓取該閱資料時，需要在抓取一次
                 conn.execute(
-                    f"INSERT OR REPLACE INTO stock_header VALUES ('{self.sid}', '{year_month_str}', CURRENT_TIMESTAMP)")
+                    f"INSERT OR REPLACE INTO stock_header VALUES ('{self.sid}', '{year_month_str}', CURRENT_TIMESTAMP,{0 if is_this_month else 1})")
                 conn.commit()
                 # 存入DB stock_daily_price
                 for data in new_fetch_data:
@@ -123,12 +126,19 @@ class MyStock(Stock):
         stock.get_target_date_n_daily_average_price(datetime(year=2024, month=2, day=25), 60)
         """
 
-        # 往前抓3倍N天前的日期的月份，確保可以抓到N日均價
-        pre_month = target_date - timedelta(days=n_daily_average * 3)
-        # 抓取 3倍N天前的日期的月份 到 當月
-        self.fetch_from_to(pre_month.year, pre_month.month, target_date.year, target_date.month)
-        # 去掉晚於target_date的資料
-        self.data = [tmp_data for tmp_data in self.data if tmp_data.date <= target_date]
+        n_day_plus = 3
+
+        while 1:
+            # 往前抓3倍N天前的日期的月份，確保可以抓到N日均價
+            pre_month = target_date - timedelta(days=n_daily_average * n_day_plus)
+            # 抓取 3倍N天前的日期的月份 到 當月
+            self.fetch_from_to(pre_month.year, pre_month.month, target_date.year, target_date.month)
+            # 去掉晚於target_date的資料
+            self.data = [tmp_data for tmp_data in self.data if tmp_data.date <= target_date]
+            if self.data:
+                break
+            # 抓3天前的資料抓不到，就在往前抓，直到抓到為止
+            n_day_plus += 3
 
         # 若最後一筆資料日期不等於目標日期，代表當日無資料，若soft為False，則回傳None
         if self.data[-1].date != target_date and not soft:
@@ -227,8 +237,9 @@ class MyStock(Stock):
         return pd.DataFrame(self.data)
 
     def check_stock_data_in_db(self, year_month_str: str) -> bool:  # sid = '2330'; year_month_str = '202301'
-        # 確認該股票該月份是否已經抓取過
-        res = conn.execute(f"SELECT * FROM stock_header WHERE sid = '{self.sid}' AND month = '{year_month_str}'")
+        # 確認該股票該月份是否已經完整抓取過或是當天已經抓過了
+        res = conn.execute(
+            f"SELECT * FROM stock_header WHERE sid = '{self.sid}' AND month = '{year_month_str}' and (is_full_data = 1 or updated_date >= date('now', 'start of day'))")
         return res.fetchone() is not None
 
     def recent_fluctuation(self, days_list: List[int] = [5, 10, 30, 60, 120]):
@@ -246,6 +257,57 @@ class MyStock(Stock):
 
         return res_dict
 
+    def cal_taiex_return(self, start_date: datetime, end_date: datetime):
+        """
+        計算大盤報酬率
+        :param start_date: 開始日期
+        :param end_date: 結束日期
+        :return:
+        """
+        # 開始日期的大盤價格，這個日期是股票有資料的日期，理論上大盤也會有。4是收盤價
+        taiex_start_price = get_TWII_data(start_date.strftime('%Y-%m-%d'))[4]
+        taiex_end_price = get_TWII_data(end_date.strftime('%Y-%m-%d'))[4]
+        # 計算大盤報酬率
+        metric = ((taiex_end_price / taiex_start_price) - 1) * 100
+        metric = round(metric, 2)
+        return metric
+
+    def cal_periodic_returns(self, start_date: datetime, end_date: datetime, interval: int = 1):
+        """
+        計算一段時間內的週期性報酬率，主要用於計算beta值
+        :param start_date: 開始日期
+        :param end_date: 結束日期
+        :param interval: 計算間隔
+        :return:
+        """
+        res = []
+        # 計算回測報酬率
+        while start_date < end_date and start_date + timedelta(days=interval) < today:
+            # 計算回測報酬率
+            stock_return = self.cal_return(start_date, n_daily_average=1, test_day_list=[interval], silent=True)[
+                str(interval)]
+            taiex_return = self.cal_taiex_return(start_date, start_date + timedelta(days=interval))
+            res.append((stock_return, taiex_return))
+            start_date += timedelta(days=interval)
+        return res
+
+    def cal_beta(self, start_date: datetime, end_date: datetime, interval: int = 1):
+        """
+        計算beta值
+        :param start_date: 開始日期
+        :param end_date: 結束日期
+        :param interval: 計算間隔
+        :return:
+        """
+        # 計算週期性報酬率
+        periodic_returns = self.cal_periodic_returns(start_date, end_date, interval)
+        # 計算beta值
+        stock_returns = [tmp[0] for tmp in periodic_returns]
+        taiex_returns = [tmp[1] for tmp in periodic_returns]
+        # 計算beta值
+        beta = np.cov(stock_returns, taiex_returns)[0][1] / np.var(taiex_returns)
+        return beta
+
 
 if __name__ == '__main__':
     start = time.time()
@@ -255,6 +317,10 @@ if __name__ == '__main__':
     start = time.time()
     stock = MyStock('00631L', initial_fetch=True)
     print(f'Init {time.time() - start} seconds')
+
+    # 計算beta值
+    stock = MyStock('00679B', initial_fetch=False)
+    print(stock.cal_beta(datetime.today() - timedelta(days=365 * 3), datetime.today(), interval=7))
 
     # 跑第一次
     start = time.time()
