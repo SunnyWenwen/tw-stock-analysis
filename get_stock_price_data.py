@@ -67,7 +67,7 @@ class MyStock(Stock):
         self.data = []
         for year, month in self._month_year_iter(from_month, from_year, to_month, to_year):
 
-            # 是否為當前月份
+            # 是否為抓取當前月份
             is_this_month = year == cur_year and month == cur_month
             year_month_str = year_month(year, month)
             # 是否抓過該月完整資料，或是今天已經抓過
@@ -128,7 +128,7 @@ class MyStock(Stock):
 
         n_day_plus = 3
 
-        while 1:
+        while n_day_plus<60:
             # 往前抓3倍N天前的日期的月份，確保可以抓到N日均價
             pre_month = target_date - timedelta(days=n_daily_average * n_day_plus)
             # 抓取 3倍N天前的日期的月份 到 當月
@@ -139,6 +139,8 @@ class MyStock(Stock):
                 break
             # 抓3天前的資料抓不到，就在往前抓，直到抓到為止
             n_day_plus += 3
+        else:
+            raise ValueError(f'股票代碼{self.sid}在{target_date}之前{60}天內無法抓取資料')
 
         # 若最後一筆資料日期不等於目標日期，代表當日無資料，若soft為False，則回傳None
         if self.data[-1].date != target_date and not soft:
